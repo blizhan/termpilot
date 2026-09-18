@@ -1,5 +1,5 @@
 [project]
-name = "termpilot"
+name = "termpilot-plugin"
 version = "0.1.0"
 description = "Give ChatGPT eyes and hands in your terminal"
 readme = "README.md"
@@ -11,6 +11,11 @@ dependencies = [
 
 [project.scripts]
 termpilot = "termpilot.main:main"
+
+[project.urls]
+Homepage = "https://github.com/blizhan/termpilot"
+Repository = "https://github.com/blizhan/termpilot"
+Issues = "https://github.com/blizhan/termpilot/issues"
 
 [build-system]
 requires = ["hatchling>=1.27"]

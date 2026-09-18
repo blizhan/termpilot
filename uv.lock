@@ -674,7 +674,7 @@ wheels = [
 ]
 
 [[package]]
-name = "termpilot"
+name = "termpilot-plugin"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

@@ -21,7 +21,20 @@ and explicit command execution.
 
 ## Install and run
 
-From the repository root:
+Install from PyPI with `uv`:
+
+```bash
+uv tool install termpilot-plugin
+termpilot
+```
+
+Or run directly without installing:
+
+```bash
+uvx --from termpilot-plugin termpilot
+```
+
+For development from the repository root:
 
 ```bash
 uv sync
@@ -29,18 +42,17 @@ uv run termpilot
 ```
 
 `termpilot` speaks MCP over stdio. It keeps stdout reserved for MCP messages;
-diagnostic logging is sent to stderr. A local MCP client can use a configuration
-like this, replacing the directory with the absolute path of this checkout:
+diagnostic logging is sent to stderr. A local MCP client can run the PyPI package
+directly with a configuration like this:
 
 ```json
 {
   "mcpServers": {
     "termpilot": {
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "run",
-        "--directory",
-        "/absolute/path/to/termpilot",
+        "--from",
+        "termpilot-plugin",
         "termpilot"
       ]
     }
@@ -220,6 +232,18 @@ tools. You do not need OAuth for the local TermPilot MCP server when using the
 Secure MCP Tunnel connection.
 
 ## Frequently Asked Questions
+
+- `tunnel-client is not installed or is not available on PATH`
+- I put `CONTROL_PLANE_API_KEY` in `.env`, but TermPilot says it is missing
+- What is the difference between `CONTROL_PLANE_API_KEY` and `OPENAI_ADMIN_KEY`?
+- Why does a manual `tunnel-client runtimes connect` complain about a missing key?
+- ChatGPT sends a command, but TermPilot says `iTerm2 is not running or its Python API is disabled`
+- Why did an older TermPilot build fail even though the direct iTerm2 test worked?
+- The tunnel log says `dispatcher forwarded command to MCP server`, but ChatGPT still gets an iTerm2 error
+- ChatGPT's plugin dialog shows `Server URL` and `Tunnel`. Which one should I use?
+- `Codex detected without Tunnel MCP plugin` appears in the tunnel-client log
+- How do I know which layer is broken?
+
 
 ### `tunnel-client is not installed or is not available on PATH`
 

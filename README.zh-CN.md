@@ -13,24 +13,36 @@ TermPilot 让 ChatGPT 能够以结构化方式查看和操作 Mac 上已经打�
 
 ## 安装与运行
 
-在仓库根目录执行：
+使用 `uv` 从 PyPI 安装：
+
+```bash
+uv tool install termpilot-plugin
+termpilot
+```
+
+也可以不安装，直接运行：
+
+```bash
+uvx --from termpilot-plugin termpilot
+```
+
+从仓库进行开发时，在仓库根目录执行：
 
 ```bash
 uv sync
 uv run termpilot
 ```
 
-`termpilot` 通过 stdio 提供 MCP 服务。stdout 专门用于 MCP 消息，诊断日志输出到 stderr。本地 MCP 客户端可以使用类似下面的配置，请将路径替换为当前仓库的绝对路径：
+`termpilot` 通过 stdio 提供 MCP 服务。stdout 专门用于 MCP 消息，诊断日志输出到 stderr。本地 MCP 客户端可以直接运行 PyPI 包：
 
 ```json
 {
   "mcpServers": {
     "termpilot": {
-      "command": "uv",
+      "command": "uvx",
       "args": [
-        "run",
-        "--directory",
-        "/absolute/path/to/termpilot",
+        "--from",
+        "termpilot-plugin",
         "termpilot"
       ]
     }
@@ -200,6 +212,18 @@ ChatGPT 发现和调用 MCP 工具时，Mac 上的 tunnel runtime 必须保持�
 Secure MCP Tunnel 连接本地 TermPilot 时，不需要给 TermPilot MCP 再配置 OAuth。
 
 ## Frequently Asked Questions / 常见问题
+
+- `tunnel-client is not installed or is not available on PATH`
+- 已经把 `CONTROL_PLANE_API_KEY` 写进 `.env`，为什么仍然提示 missing？
+- `CONTROL_PLANE_API_KEY` 和 `OPENAI_ADMIN_KEY` 有什么区别？
+- 为什么手工执行 `tunnel-client runtimes connect` 会提示缺少 key？
+- ChatGPT 能把请求转发过来，但 TermPilot 报 `iTerm2 is not running or its Python API is disabled`
+- 为什么旧版 TermPilot 在直接 iTerm2 测试成功时仍会失败？
+- tunnel 日志已经出现 `dispatcher forwarded command to MCP server`，为什么 ChatGPT 仍得到 iTerm2 错误？
+- ChatGPT 新插件里同时有“服务器 URL”和“隧道”，应该选哪个？
+- tunnel-client 日志里出现 `Codex detected without Tunnel MCP plugin` 有影响吗？
+- 怎么快速判断故障在哪一层？
+
 
 ### `tunnel-client is not installed or is not available on PATH`
 
