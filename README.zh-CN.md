@@ -213,110 +213,98 @@ Secure MCP Tunnel 连接本地 TermPilot 时，不需要给 TermPilot MCP 再配
 
 ## Frequently Asked Questions / 常见问题
 
-- `tunnel-client is not installed or is not available on PATH`
-- 已经把 `CONTROL_PLANE_API_KEY` 写进 `.env`，为什么仍然提示 missing？
-- `CONTROL_PLANE_API_KEY` 和 `OPENAI_ADMIN_KEY` 有什么区别？
-- 为什么手工执行 `tunnel-client runtimes connect` 会提示缺少 key？
-- ChatGPT 能把请求转发过来，但 TermPilot 报 `iTerm2 is not running or its Python API is disabled`
-- 为什么旧版 TermPilot 在直接 iTerm2 测试成功时仍会失败？
-- tunnel 日志已经出现 `dispatcher forwarded command to MCP server`，为什么 ChatGPT 仍得到 iTerm2 错误？
-- ChatGPT 新插件里同时有“服务器 URL”和“隧道”，应该选哪个？
-- tunnel-client 日志里出现 `Codex detected without Tunnel MCP plugin` 有影响吗？
-- 怎么快速判断故障在哪一层？
+- **`tunnel-client is not installed or is not available on PATH`**
 
+  安装并确认命令可见：
 
-### `tunnel-client is not installed or is not available on PATH`
+  ```bash
+  brew install openai/tools/tunnel-client
+  which tunnel-client
+  tunnel-client --version
+  ```
 
-安装并确认命令可见：
+- **已经把 `CONTROL_PLANE_API_KEY` 写进 `.env`，为什么仍然提示 missing？**
 
-```bash
-brew install openai/tools/tunnel-client
-which tunnel-client
-tunnel-client --version
-```
+  `.env` 文件本身不会自动 export 环境变量。启动或诊断 tunnel runtime 的每个
+  shell/process 都要先加载：
 
-### 已经把 `CONTROL_PLANE_API_KEY` 写进 `.env`，为什么仍然提示 missing？
+  ```bash
+  set -a
+  source .env
+  set +a
+  uv run termpilot chatgpt setup --tunnel-id tunnel_...
+  ```
 
-`.env` 文件本身不会自动 export 环境变量。启动或诊断 tunnel runtime 的每个
-shell/process 都要先加载：
+- **`CONTROL_PLANE_API_KEY` 和 `OPENAI_ADMIN_KEY` 有什么区别？**
 
-```bash
-set -a
-source .env
-set +a
-uv run termpilot chatgpt setup --tunnel-id tunnel_...
-```
+  `CONTROL_PLANE_API_KEY` 是长期运行的 tunnel daemon 使用的 runtime key，需要
+  **Tunnels Read + Use**。`OPENAI_ADMIN_KEY` 用于
+  `tunnel-client admin tunnels create` 等 tunnel 管理操作。连接已经存在的 tunnel
+  时，TermPilot runtime 不需要 admin key。
 
-### `CONTROL_PLANE_API_KEY` 和 `OPENAI_ADMIN_KEY` 有什么区别？
+- **为什么手工执行 `tunnel-client runtimes connect` 会提示缺少 key？**
 
-`CONTROL_PLANE_API_KEY` 是长期运行的 tunnel daemon 使用的 runtime key，需要
-**Tunnels Read + Use**。`OPENAI_ADMIN_KEY` 用于
-`tunnel-client admin tunnels create` 等 tunnel 管理操作。连接已经存在的 tunnel
-时，TermPilot runtime 不需要 admin key。
+  生成的 profile 保存的是 `env:CONTROL_PLANE_API_KEY` 这种环境变量引用。因此启动
+  profile 的进程必须真的拥有这个环境变量。推荐直接使用
+  `uv run termpilot chatgpt setup ...`，它会统一生成正确的 runtime-key 引用和 MCP
+  启动命令。
 
-### 为什么手工执行 `tunnel-client runtimes connect` 会提示缺少 key？
+- **ChatGPT 能把请求转发过来，但 TermPilot 报 `iTerm2 is not running or its Python API is disabled`**
 
-生成的 profile 保存的是 `env:CONTROL_PLANE_API_KEY` 这种环境变量引用。因此启动
-profile 的进程必须真的拥有这个环境变量。推荐直接使用
-`uv run termpilot chatgpt setup ...`，它会统一生成正确的 runtime-key 引用和 MCP
-启动命令。
+  先检查 iTerm2：
 
-### ChatGPT 能把请求转发过来，但 TermPilot 报 `iTerm2 is not running or its Python API is disabled`
+  1. 打开 **iTerm2 → Settings → General → Magic**。
+  2. 勾选 **Enable Python API**。
+  3. 选择 **Allow all apps to connect**，或者明确允许运行 TermPilot 的进程连接。
 
-先检查 iTerm2：
+  然后从 TermPilot 的 Python 环境直接验证 iTerm2 API：
 
-1. 打开 **iTerm2 → Settings → General → Magic**。
-2. 勾选 **Enable Python API**。
-3. 选择 **Allow all apps to connect**，或者明确允许运行 TermPilot 的进程连接。
+  ```bash
+  uv run python - <<'PY'
+  import asyncio
+  import iterm2
 
-然后从 TermPilot 的 Python 环境直接验证 iTerm2 API：
+  async def main():
+      connection = await iterm2.Connection.async_create()
+      app = await iterm2.async_get_app(connection)
+      print([s.session_id for w in app.windows for t in w.tabs for s in t.sessions])
 
-```bash
-uv run python - <<'PY'
-import asyncio
-import iterm2
+  asyncio.run(main())
+  PY
+  ```
 
-async def main():
-    connection = await iterm2.Connection.async_create()
-    app = await iterm2.async_get_app(connection)
-    print([s.session_id for w in app.windows for t in w.tabs for s in t.sessions])
+  如果能打印 session ID，说明 iTerm2 Python API 本身正常，应该继续排查本机
+  TermPilot → iTerm2 这一段，而不是重新创建 ChatGPT tunnel。
 
-asyncio.run(main())
-PY
-```
+- **为什么旧版 TermPilot 在直接 iTerm2 测试成功时仍会失败？**
 
-如果能打印 session ID，说明 iTerm2 Python API 本身正常，应该继续排查本机
-TermPilot → iTerm2 这一段，而不是重新创建 ChatGPT tunnel。
+  早期 adapter 调用了
+  `iterm2.async_get_app(..., create_if_needed=False)`。在 iTerm2 3.6.x 上，即使
+  iTerm2 已经运行，这个调用也可能返回 `None`。现在 TermPilot 会允许 SDK 创建
+  `App` wrapper，与能够正常工作的 `iterm2.async_get_app(connection)` 行为一致。
 
-### 为什么旧版 TermPilot 在直接 iTerm2 测试成功时仍会失败？
+- **tunnel 日志已经出现 `dispatcher forwarded command to MCP server`，为什么 ChatGPT 仍得到 iTerm2 错误？**
 
-早期 adapter 调用了
-`iterm2.async_get_app(..., create_if_needed=False)`。在 iTerm2 3.6.x 上，即使
-iTerm2 已经运行，这个调用也可能返回 `None`。现在 TermPilot 会允许 SDK 创建
-`App` wrapper，与能够正常工作的 `iterm2.async_get_app(connection)` 行为一致。
+  这条日志已经证明 **ChatGPT → Secure MCP Tunnel → TermPilot MCP** 是通的。下一步
+  应检查本机 **TermPilot → iTerm2 Python API**，不要继续反复重建 ChatGPT 插件或
+  tunnel。
 
-### tunnel 日志已经出现 `dispatcher forwarded command to MCP server`，为什么 ChatGPT 仍得到 iTerm2 错误？
+- **ChatGPT 新插件里同时有“服务器 URL”和“隧道”，应该选哪个？**
 
-这条日志已经证明 **ChatGPT → Secure MCP Tunnel → TermPilot MCP** 是通的。下一步
-应检查本机 **TermPilot → iTerm2 Python API**，不要继续反复重建 ChatGPT 插件或
-tunnel。
+  选择 **隧道 / Tunnel**，然后选择或粘贴 `tunnel_id`。**服务器 URL** 是给网络上
+  可直接访问的 HTTP/SSE MCP server 使用的，不是这里的 TermPilot 方案。
 
-### ChatGPT 新插件里同时有“服务器 URL”和“隧道”，应该选哪个？
+- **tunnel-client 日志里出现 `Codex detected without Tunnel MCP plugin` 有影响吗？**
 
-选择 **隧道 / Tunnel**，然后选择或粘贴 `tunnel_id`。**服务器 URL** 是给网络上
-可直接访问的 HTTP/SSE MCP server 使用的，不是这里的 TermPilot 方案。
+  没有。这条提示针对可选的 Codex tunnel plugin 集成，不会阻止 ChatGPT Classic
+  通过 developer-mode 插件使用 TermPilot tunnel。
 
-### tunnel-client 日志里出现 `Codex detected without Tunnel MCP plugin` 有影响吗？
+- **怎么快速判断故障在哪一层？**
 
-没有。这条提示针对可选的 Codex tunnel plugin 集成，不会阻止 ChatGPT Classic
-通过 developer-mode 插件使用 TermPilot tunnel。
+  按下面顺序检查：
 
-### 怎么快速判断故障在哪一层？
-
-按下面顺序检查：
-
-1. `uv run termpilot chatgpt status`：runtime 应处于 running / healthy / ready。
-2. tunnel 日志出现 `dispatcher forwarded command to MCP server`：说明 ChatGPT 到
-   TermPilot 的 tunnel 链路正常。
-3. 执行上面的 iTerm2 Python 直连脚本：确认本机 iTerm2 API 正常。
-4. 最后回到 ChatGPT 的 TermPilot 插件调用 `list_sessions`。
+  1. `uv run termpilot chatgpt status`：runtime 应处于 running / healthy / ready。
+  2. tunnel 日志出现 `dispatcher forwarded command to MCP server`：说明 ChatGPT 到
+     TermPilot 的 tunnel 链路正常。
+  3. 执行上面的 iTerm2 Python 直连脚本：确认本机 iTerm2 API 正常。
+  4. 最后回到 ChatGPT 的 TermPilot 插件调用 `list_sessions`。

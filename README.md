@@ -233,112 +233,100 @@ Secure MCP Tunnel connection.
 
 ## Frequently Asked Questions
 
-- `tunnel-client is not installed or is not available on PATH`
-- I put `CONTROL_PLANE_API_KEY` in `.env`, but TermPilot says it is missing
-- What is the difference between `CONTROL_PLANE_API_KEY` and `OPENAI_ADMIN_KEY`?
-- Why does a manual `tunnel-client runtimes connect` complain about a missing key?
-- ChatGPT sends a command, but TermPilot says `iTerm2 is not running or its Python API is disabled`
-- Why did an older TermPilot build fail even though the direct iTerm2 test worked?
-- The tunnel log says `dispatcher forwarded command to MCP server`, but ChatGPT still gets an iTerm2 error
-- ChatGPT's plugin dialog shows `Server URL` and `Tunnel`. Which one should I use?
-- `Codex detected without Tunnel MCP plugin` appears in the tunnel-client log
-- How do I know which layer is broken?
+- **`tunnel-client is not installed or is not available on PATH`**
 
+  Install the supported client and verify it is visible:
 
-### `tunnel-client is not installed or is not available on PATH`
+  ```bash
+  brew install openai/tools/tunnel-client
+  which tunnel-client
+  tunnel-client --version
+  ```
 
-Install the supported client and verify it is visible:
+- **I put `CONTROL_PLANE_API_KEY` in `.env`, but TermPilot says it is missing**
 
-```bash
-brew install openai/tools/tunnel-client
-which tunnel-client
-tunnel-client --version
-```
+  Creating `.env` does not export its variables. Load it into each shell/process
+  that starts or diagnoses the tunnel runtime:
 
-### I put `CONTROL_PLANE_API_KEY` in `.env`, but TermPilot says it is missing
+  ```bash
+  set -a
+  source .env
+  set +a
+  uv run termpilot chatgpt setup --tunnel-id tunnel_...
+  ```
 
-Creating `.env` does not export its variables. Load it into each shell/process
-that starts or diagnoses the tunnel runtime:
+- **What is the difference between `CONTROL_PLANE_API_KEY` and `OPENAI_ADMIN_KEY`?**
 
-```bash
-set -a
-source .env
-set +a
-uv run termpilot chatgpt setup --tunnel-id tunnel_...
-```
+  `CONTROL_PLANE_API_KEY` is the runtime key used by the long-running tunnel
+  daemon. It needs **Tunnels Read + Use**. `OPENAI_ADMIN_KEY` is for administrative
+  tunnel CRUD such as `tunnel-client admin tunnels create`; the TermPilot runtime
+  does not need it when attaching to an existing tunnel.
 
-### What is the difference between `CONTROL_PLANE_API_KEY` and `OPENAI_ADMIN_KEY`?
+- **Why does a manual `tunnel-client runtimes connect` complain about a missing key?**
 
-`CONTROL_PLANE_API_KEY` is the runtime key used by the long-running tunnel
-daemon. It needs **Tunnels Read + Use**. `OPENAI_ADMIN_KEY` is for administrative
-tunnel CRUD such as `tunnel-client admin tunnels create`; the TermPilot runtime
-does not need it when attaching to an existing tunnel.
+  The generated profile contains an environment reference such as
+  `env:CONTROL_PLANE_API_KEY`. The process starting that profile must therefore
+  have the variable exported. Prefer `uv run termpilot chatgpt setup ...`, which
+  supplies the correct runtime-key reference and MCP command consistently.
 
-### Why does a manual `tunnel-client runtimes connect` complain about a missing key?
+- **ChatGPT sends a command, but TermPilot says `iTerm2 is not running or its Python API is disabled`**
 
-The generated profile contains an environment reference such as
-`env:CONTROL_PLANE_API_KEY`. The process starting that profile must therefore
-have the variable exported. Prefer `uv run termpilot chatgpt setup ...`, which
-supplies the correct runtime-key reference and MCP command consistently.
+  First verify iTerm2 itself:
 
-### ChatGPT sends a command, but TermPilot says `iTerm2 is not running or its Python API is disabled`
+  1. Open **iTerm2 → Settings → General → Magic**.
+  2. Enable **Python API**.
+  3. Set it to **Allow all apps to connect** (or explicitly allow the process that
+     runs TermPilot).
 
-First verify iTerm2 itself:
+  Then test the iTerm2 API directly from the TermPilot environment:
 
-1. Open **iTerm2 → Settings → General → Magic**.
-2. Enable **Python API**.
-3. Set it to **Allow all apps to connect** (or explicitly allow the process that
-   runs TermPilot).
+  ```bash
+  uv run python - <<'PY'
+  import asyncio
+  import iterm2
 
-Then test the iTerm2 API directly from the TermPilot environment:
+  async def main():
+      connection = await iterm2.Connection.async_create()
+      app = await iterm2.async_get_app(connection)
+      print([s.session_id for w in app.windows for t in w.tabs for s in t.sessions])
 
-```bash
-uv run python - <<'PY'
-import asyncio
-import iterm2
+  asyncio.run(main())
+  PY
+  ```
 
-async def main():
-    connection = await iterm2.Connection.async_create()
-    app = await iterm2.async_get_app(connection)
-    print([s.session_id for w in app.windows for t in w.tabs for s in t.sessions])
+  If this prints session IDs, the iTerm2 API is working and the problem is in the
+  TermPilot/iTerm2 boundary rather than the ChatGPT tunnel.
 
-asyncio.run(main())
-PY
-```
+- **Why did an older TermPilot build fail even though the direct iTerm2 test worked?**
 
-If this prints session IDs, the iTerm2 API is working and the problem is in the
-TermPilot/iTerm2 boundary rather than the ChatGPT tunnel.
+  An earlier adapter called `iterm2.async_get_app(..., create_if_needed=False)`.
+  With iTerm2 3.6.x this can return `None` even while iTerm2 is already running.
+  TermPilot now allows the SDK to create its `App` wrapper, matching the working
+  `iterm2.async_get_app(connection)` call.
 
-### Why did an older TermPilot build fail even though the direct iTerm2 test worked?
+- **The tunnel log says `dispatcher forwarded command to MCP server`, but ChatGPT still gets an iTerm2 error**
 
-An earlier adapter called `iterm2.async_get_app(..., create_if_needed=False)`.
-With iTerm2 3.6.x this can return `None` even while iTerm2 is already running.
-TermPilot now allows the SDK to create its `App` wrapper, matching the working
-`iterm2.async_get_app(connection)` call.
+  That log line proves the path **ChatGPT → Secure MCP Tunnel → TermPilot MCP** is
+  working. Debug the local **TermPilot → iTerm2 Python API** boundary next instead
+  of recreating the ChatGPT plugin or tunnel.
 
-### The tunnel log says `dispatcher forwarded command to MCP server`, but ChatGPT still gets an iTerm2 error
+- **ChatGPT's plugin dialog shows `Server URL` and `Tunnel`. Which one should I use?**
 
-That log line proves the path **ChatGPT → Secure MCP Tunnel → TermPilot MCP** is
-working. Debug the local **TermPilot → iTerm2 Python API** boundary next instead
-of recreating the ChatGPT plugin or tunnel.
+  Choose **Tunnel** and select/paste the `tunnel_id`. `Server URL` is for a
+  network-reachable HTTP/SSE MCP server and is not the TermPilot setup described
+  here.
 
-### ChatGPT's plugin dialog shows `Server URL` and `Tunnel`. Which one should I use?
+- **`Codex detected without Tunnel MCP plugin` appears in the tunnel-client log**
 
-Choose **Tunnel** and select/paste the `tunnel_id`. `Server URL` is for a
-network-reachable HTTP/SSE MCP server and is not the TermPilot setup described
-here.
+  This message is about optional Codex integration. It does not prevent the
+  ChatGPT Classic developer-mode plugin from using the TermPilot tunnel.
 
-### `Codex detected without Tunnel MCP plugin` appears in the tunnel-client log
+- **How do I know which layer is broken?**
 
-This message is about optional Codex integration. It does not prevent the
-ChatGPT Classic developer-mode plugin from using the TermPilot tunnel.
+  Use this order:
 
-### How do I know which layer is broken?
-
-Use this order:
-
-1. `uv run termpilot chatgpt status` → runtime should be running, healthy, and ready.
-2. Tunnel log contains `dispatcher forwarded command to MCP server` → ChatGPT to
-   TermPilot transport is working.
-3. Run the direct iTerm2 Python snippet above → local iTerm2 API is working.
-4. Finally test `list_sessions` from the ChatGPT TermPilot plugin.
+  1. `uv run termpilot chatgpt status` → runtime should be running, healthy, and ready.
+  2. Tunnel log contains `dispatcher forwarded command to MCP server` → ChatGPT to
+     TermPilot transport is working.
+  3. Run the direct iTerm2 Python snippet above → local iTerm2 API is working.
+  4. Finally test `list_sessions` from the ChatGPT TermPilot plugin.
