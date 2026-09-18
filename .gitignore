@@ -205,6 +205,13 @@ tempCodeRunnerFile.py
 
 # Ruff stuff:
 .ruff_cache/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+.worktrees/
 
 # PyPI configuration file
 .pypirc
@@ -216,3 +223,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Agents
+.agents/
+
+# specify
+.specify/
